@@ -6,51 +6,66 @@ app = Flask(__name__)
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 mongo = PyMongo(app)
 
-# Main route named 'index' so url_for('index') works everywhere
 @app.route('/')
+@app.route('/index')
 def index():
-    students = list(mongo.db.students.find()) if mongo.db is not None else []
+    students = []
+    try:
+        if mongo.db is not None:
+            students = list(mongo.db.students.find())
+    except Exception:
+        pass
     return render_template('index.html', students=students)
 
-# Supporting 'home' alias just in case
 @app.route('/home')
 def home():
     return redirect(url_for('index'))
 
 @app.route('/add', methods=['POST'])
 def add_student():
-    if mongo.db is not None:
-        name = request.form.get('name')
-        email = request.form.get('email')
-        course = request.form.get('course')
-        mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
+    try:
+        if mongo.db is not None:
+            name = request.form.get('name')
+            email = request.form.get('email')
+            course = request.form.get('course')
+            mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
+    except Exception:
+        pass
     return redirect(url_for('index'))
 
 @app.route('/update/<student_id>', methods=['POST'])
 def update_student(student_id):
-    if mongo.db is not None:
-        from bson.objectid import ObjectId
-        name = request.form.get('name')
-        email = request.form.get('email')
-        course = request.form.get('course')
-        mongo.db.students.update_one(
-            {'_id': ObjectId(student_id)},
-            {'$set': {'name': name, 'email': email, 'course': course}}
-        )
+    try:
+        if mongo.db is not None:
+            from bson.objectid import ObjectId
+            name = request.form.get('name')
+            email = request.form.get('email')
+            course = request.form.get('course')
+            mongo.db.students.update_one(
+                {'_id': ObjectId(student_id)},
+                {'$set': {'name': name, 'email': email, 'course': course}}
+            )
+    except Exception:
+        pass
     return redirect(url_for('index'))
 
 @app.route('/delete/<student_id>')
 def delete_student(student_id):
-    if mongo.db is not None:
-        from bson.objectid import ObjectId
-        mongo.db.students.delete_one({'_id': ObjectId(student_id)})
+    try:
+        if mongo.db is not None:
+            from bson.objectid import ObjectId
+            mongo.db.students.delete_one({'_id': ObjectId(student_id)})
+    except Exception:
+        pass
     return redirect(url_for('index'))
 
 @app.route('/health', methods=['GET'])
 def health_check():
     try:
-        mongo.db.command('ping')
-        return jsonify({"status": "healthy", "database": "connected"}), 200
+        if mongo.db is not None:
+            mongo.db.command('ping')
+            return jsonify({"status": "healthy", "database": "connected"}), 200
+        return jsonify({"status": "unhealthy", "database": "not configured"}), 500
     except Exception as e:
         return jsonify({"status": "unhealthy", "database": str(e)}), 500
 
