@@ -56,7 +56,6 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
 
       # 6. SSH Deploy to EC2
       - name: Deploy to EC2
@@ -90,14 +89,56 @@ jobs:
           sleep 10
           curl --fail http://${{ secrets.EC2_HOST }}:5000/health || exit 1
 
-# 8. Success Email Notification
+      # 8. Success Email Notification
       - name: Send Success Email
         if: always() && steps.health.outcome == 'success'
         uses: dawidd6/action-send-mail@v3
-        ...
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "✅ [SUCCESS] CI/CD Pipeline Deployment Completed"
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.SMTP_USERNAME }}
+          body: |
+            Hi Team,
+
+            The CI/CD pipeline deployment was successful! 🎉
+
+            📌 **Build Details:**
+            • Commit SHA: ${{ github.sha }}
+            • Branch: ${{ github.ref_name }}
+            • Docker Image Tag: ${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+            • Target EC2 Host: ${{ secrets.EC2_HOST }}
+            • Pipeline Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Regards,
+            Automated CI/CD System
 
       # 8. Failure Email Notification
       - name: Send Failure Email
         if: always() && failure()
         uses: dawidd6/action-send-mail@v3
-        ...
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ [FAILURE] CI/CD Pipeline Failed"
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.SMTP_USERNAME }}
+          body: |
+            Hi Team,
+
+            The CI/CD pipeline run failed! ⚠️
+
+            📌 **Failure Summary:**
+            • Commit SHA: ${{ github.sha }}
+            • Branch: ${{ github.ref_name }}
+            • Check Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Please investigate the pipeline steps immediately.
+
+            Regards,
+            Automated CI/CD System
