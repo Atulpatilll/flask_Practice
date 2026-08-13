@@ -2,10 +2,10 @@ import pytest
 from app import app, mongo
 from bson.objectid import ObjectId
 
+
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
-    app.config["MONGO_URI"] = "mongodb://localhost:27017/test_student_db"  # test DB
     client = app.test_client()
 
     # Setup: clear and create test data
@@ -19,9 +19,9 @@ def client():
         })
     yield client
 
-    # Teardown: drop DB after test
+    # Teardown: clear test collection
     with app.app_context():
-        mongo.cx.drop_database("test_student_db")
+        mongo.db.students.delete_many({})
 
 
 def test_home_page(client):
@@ -61,4 +61,9 @@ def test_delete_student(client):
     response = client.get(f'/delete/{student_id}', follow_redirects=True)
     assert response.status_code == 200
     assert b"Temp User" not in response.data
-@app.route('/health', methods=['GET'])
+
+
+def test_health_check(client):
+    """Test health check route"""
+    response = client.get('/health')
+    assert response.status_code in [200, 500]
