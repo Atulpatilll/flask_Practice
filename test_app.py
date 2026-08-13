@@ -7,11 +7,9 @@ from bson.objectid import ObjectId
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
-    # Fallback to a dummy connection or environment MONGO_URI so PyMongo initializes
     mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/test_student_db")
     app.config["MONGO_URI"] = mongo_uri
-    
-    # Initialize PyMongo with the app if it wasn't bound
+
     with app.app_context():
         try:
             mongo.init_app(app)
@@ -20,7 +18,6 @@ def client():
 
     client = app.test_client()
 
-    # Setup: attempt test data setup
     with app.app_context():
         try:
             mongo.db.students.delete_many({})
@@ -35,7 +32,6 @@ def client():
 
     yield client
 
-    # Teardown
     with app.app_context():
         try:
             mongo.db.students.delete_many({})
@@ -75,4 +71,4 @@ def test_health_check(client):
     """Test health check route"""
     response = client.get('/health')
     assert response.status_code in [200, 500]
-    
+
