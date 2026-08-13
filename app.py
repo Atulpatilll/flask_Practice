@@ -1,145 +1,52 @@
-name: CI/CD Pipeline
+import os
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask_pymongo import PyMongo
 
-on:
-  push:
-    branches:
-      - main
-      - master
+app = Flask(__name__)
+app.config["MONGO_URI"] = os.getenv("MONGO_URI")
+mongo = PyMongo(app)
 
-jobs:
-  pipeline:
-    runs-on: ubuntu-latest
+@app.route('/')
+def home():
+    students = list(mongo.db.students.find()) if mongo.db is not None else []
+    return render_template('index.html', students=students)
 
-    steps:
-      # 1. Checkout
-      - name: Checkout Code
-        uses: actions/checkout@v3
+@app.route('/add', methods=['POST'])
+def add_student():
+    if mongo.db is not None:
+        name = request.form.get('name')
+        email = request.form.get('email')
+        course = request.form.get('course')
+        mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
+    return redirect(url_for('home'))
 
-      # 2. Install Dependencies
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+@app.route('/update/<student_id>', methods=['POST'])
+def update_student(student_id):
+    if mongo.db is not None:
+        from bson.objectid import ObjectId
+        name = request.form.get('name')
+        email = request.form.get('email')
+        course = request.form.get('course')
+        mongo.db.students.update_one(
+            {'_id': ObjectId(student_id)},
+            {'$set': {'name': name, 'email': email, 'course': course}}
+        )
+    return redirect(url_for('home'))
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+@app.route('/delete/<student_id>')
+def delete_student(student_id):
+    if mongo.db is not None:
+        from bson.objectid import ObjectId
+        mongo.db.students.delete_one({'_id': ObjectId(student_id)})
+    return redirect(url_for('home'))
 
-      # 3. Test Gate
-      - name: Run Pytest
-        id: test
-        env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-        run: |
-          pytest
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        mongo.db.command('ping')
+        return jsonify({"status": "healthy", "database": "connected"}), 200
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "database": str(e)}), 500
 
-      # 4. AWS Credentials Setup
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      # 5. ECR Login & Push (Tagged with Git Commit SHA)
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build, Tag, and Push Docker Image
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-      # 6. SSH Deploy to EC2
-      - name: Deploy to EC2
-        id: deploy
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-            REPO="${{ secrets.ECR_REPOSITORY }}"
-            TAG="${{ github.sha }}"
-            IMAGE_URI="$REGISTRY/$REPO:$TAG"
-
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY
-            docker stop student-app-container || true
-            docker rm student-app-container || true
-            docker pull $IMAGE_URI
-            docker run -d \
-              --name student-app-container \
-              --restart unless-stopped \
-              -p 5000:5000 \
-              -e MONGO_URI="${{ secrets.MONGO_URI }}" \
-              $IMAGE_URI
-
-      # 7. Deploy Verification (Health Check)
-      - name: Verify Health Check
-        id: health
-        run: |
-          sleep 10
-          curl --fail http://${{ secrets.EC2_HOST }}:5000/health || exit 1
-
-      # 8. Success Email Notification
-      - name: Send Success Email
-        if: always() && steps.health.outcome == 'success'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "✅ [SUCCESS] CI/CD Pipeline Deployment Completed"
-          to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: ${{ secrets.SMTP_USERNAME }}
-          body: |
-            Hi Team,
-
-            The CI/CD pipeline deployment was successful! 🎉
-
-            📌 **Build Details:**
-            • Commit SHA: ${{ github.sha }}
-            • Branch: ${{ github.ref_name }}
-            • Docker Image Tag: ${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
-            • Target EC2 Host: ${{ secrets.EC2_HOST }}
-            • Pipeline Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Regards,
-            Automated CI/CD System
-
-      # 8. Failure Email Notification
-      - name: Send Failure Email
-        if: always() && failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "❌ [FAILURE] CI/CD Pipeline Failed"
-          to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: ${{ secrets.SMTP_USERNAME }}
-          body: |
-            Hi Team,
-
-            The CI/CD pipeline run failed! ⚠️
-
-            📌 **Failure Summary:**
-            • Commit SHA: ${{ github.sha }}
-            • Branch: ${{ github.ref_name }}
-            • Check Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Please investigate the pipeline steps immediately.
-
-            Regards,
-            Automated CI/CD System
-
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
