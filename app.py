@@ -7,9 +7,14 @@ app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 mongo = PyMongo(app)
 
 @app.route('/')
-def index():
+def home():
     students = list(mongo.db.students.find()) if mongo.db is not None else []
     return render_template('index.html', students=students)
+
+# Support both endpoint names just in case templates or tests reference 'index'
+@app.route('/index')
+def index():
+    return redirect(url_for('home'))
 
 @app.route('/add', methods=['POST'])
 def add_student():
@@ -18,7 +23,7 @@ def add_student():
         email = request.form.get('email')
         course = request.form.get('course')
         mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
-    return redirect(url_for('index'))
+    return redirect(url_for('home'))
 
 @app.route('/update/<student_id>', methods=['POST'])
 def update_student(student_id):
@@ -31,14 +36,14 @@ def update_student(student_id):
             {'_id': ObjectId(student_id)},
             {'$set': {'name': name, 'email': email, 'course': course}}
         )
-    return redirect(url_for('index'))
+    return redirect(url_for('home'))
 
 @app.route('/delete/<student_id>')
 def delete_student(student_id):
     if mongo.db is not None:
         from bson.objectid import ObjectId
         mongo.db.students.delete_one({'_id': ObjectId(student_id)})
-    return redirect(url_for('index'))
+    return redirect(url_for('home'))
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -50,3 +55,4 @@ def health_check():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+
