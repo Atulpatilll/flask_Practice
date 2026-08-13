@@ -67,16 +67,21 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+            REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+            REPO="${{ secrets.ECR_REPOSITORY }}"
+            TAG="${{ github.sha }}"
+            IMAGE_URI="$REGISTRY/$REPO:$TAG"
+
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY
             docker stop student-app-container || true
             docker rm student-app-container || true
-            docker pull ${{ env.IMAGE_URI }}
+            docker pull $IMAGE_URI
             docker run -d \
               --name student-app-container \
               --restart unless-stopped \
               -p 5000:5000 \
               -e MONGO_URI="${{ secrets.MONGO_URI }}" \
-              ${{ env.IMAGE_URI }}
+              $IMAGE_URI
 
       # 7. Deploy Verification (Health Check)
       - name: Verify Health Check
