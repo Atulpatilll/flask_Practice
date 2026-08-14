@@ -26,26 +26,38 @@ def add_student():
                 name = request.form.get('name')
                 email = request.form.get('email')
                 course = request.form.get('course')
-                mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
+                if name and email:
+                    mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
         except Exception:
             pass
-    return redirect(url_for('index'))
+        return redirect(url_for('index'))
+    return render_template('add.html')
 
-@app.route('/update/<student_id>', methods=['POST'])
+@app.route('/update/<student_id>', methods=['GET', 'POST'])
 def update_student(student_id):
+    if request.method == 'POST':
+        try:
+            if mongo.db is not None:
+                from bson.objectid import ObjectId
+                name = request.form.get('name')
+                email = request.form.get('email')
+                course = request.form.get('course')
+                mongo.db.students.update_one(
+                    {'_id': ObjectId(student_id)},
+                    {'$set': {'name': name, 'email': email, 'course': course}}
+                )
+        except Exception:
+            pass
+        return redirect(url_for('index'))
+    
+    student = None
     try:
         if mongo.db is not None:
             from bson.objectid import ObjectId
-            name = request.form.get('name')
-            email = request.form.get('email')
-            course = request.form.get('course')
-            mongo.db.students.update_one(
-                {'_id': ObjectId(student_id)},
-                {'$set': {'name': name, 'email': email, 'course': course}}
-            )
+            student = mongo.db.students.find_one({'_id': ObjectId(student_id)})
     except Exception:
         pass
-    return redirect(url_for('index'))
+    return render_template('index.html', students=[], edit_student=student)
 
 @app.route('/delete/<student_id>')
 def delete_student(student_id):
