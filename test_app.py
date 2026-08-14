@@ -41,3 +41,4 @@ def test_health_check(client):
     """Test health check route"""
     response = client.get('/health')
     assert response.status_code in [200, 500]
+    
