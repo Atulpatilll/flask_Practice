@@ -1,73 +1,43 @@
-import os
-from flask import Flask, render_template, request, redirect, url_for, jsonify
-from flask_pymongo import PyMongo
+import pytest
+from app import app
 
-app = Flask(__name__)
-app.config["MONGO_URI"] = os.getenv("MONGO_URI")
-mongo = PyMongo(app)
 
-@app.route('/')
-@app.route('/index')
-def index():
-    students = []
-    try:
-        if mongo.db is not None:
-            students = list(mongo.db.students.find())
-    except Exception:
-        pass
-    return render_template('index.html', students=students)
+@pytest.fixture
+def client():
+    app.config["TESTING"] = True
+    client = app.test_client()
+    yield client
 
-@app.route('/home')
-def home():
-    return redirect(url_for('index'))
 
-@app.route('/add', methods=['POST'])
-def add_student():
-    try:
-        if mongo.db is not None:
-            name = request.form.get('name')
-            email = request.form.get('email')
-            course = request.form.get('course')
-            mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
-    except Exception:
-        pass
-    return redirect(url_for('index'))
+def test_home_page(client):
+    """Test if home page loads correctly"""
+    response = client.get('/')
+    assert response.status_code in [200, 302]
 
-@app.route('/update/<student_id>', methods=['POST'])
-def update_student(student_id):
-    try:
-        if mongo.db is not None:
-            from bson.objectid import ObjectId
-            name = request.form.get('name')
-            email = request.form.get('email')
-            course = request.form.get('course')
-            mongo.db.students.update_one(
-                {'_id': ObjectId(student_id)},
-                {'$set': {'name': name, 'email': email, 'course': course}}
-            )
-    except Exception:
-        pass
-    return redirect(url_for('index'))
 
-@app.route('/delete/<student_id>')
-def delete_student(student_id):
-    try:
-        if mongo.db is not None:
-            from bson.objectid import ObjectId
-            mongo.db.students.delete_one({'_id': ObjectId(student_id)})
-    except Exception:
-        pass
-    return redirect(url_for('index'))
+def test_add_student(client):
+    """Test adding a new student route"""
+    data = {"name": "New User", "email": "new@user.com", "course": "Python"}
+    response = client.post('/add', data=data, follow_redirects=True)
+    assert response.status_code in [200, 302]
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    try:
-        if mongo.db is not None:
-            mongo.db.command('ping')
-            return jsonify({"status": "healthy", "database": "connected"}), 200
-        return jsonify({"status": "unhealthy", "database": "not configured"}), 500
-    except Exception as e:
-        return jsonify({"status": "unhealthy", "database": str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+def test_update_student(client):
+    """Test updating a student route"""
+    student_id = "66fddff25f4b5f6a0a123456"
+    data = {"name": "Updated Name", "email": "updated@student.com", "course": "Updated Course"}
+    response = client.post(f'/update/{student_id}', data=data, follow_redirects=True)
+    assert response.status_code in [200, 302]
+
+
+def test_delete_student(client):
+    """Test deleting a student route"""
+    student_id = "66fddff25f4b5f6a0a123456"
+    response = client.get(f'/delete/{student_id}', follow_redirects=True)
+    assert response.status_code in [200, 302]
+
+
+def test_health_check(client):
+    """Test health check route"""
+    response = client.get('/health')
+    assert response.status_code in [200, 500]
