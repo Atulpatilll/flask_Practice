@@ -71,9 +71,17 @@ jobs:
             TAG="${{ github.sha }}"
             IMAGE_URI="$REGISTRY/$REPO:$TAG"
 
+            # Authenticate with ECR
+            export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+            export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            export AWS_DEFAULT_REGION="${{ secrets.AWS_REGION }}"
+
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY
-            docker stop student-app-container || true
-            docker rm student-app-container || true
+
+            # Force remove existing container to prevent name/port conflicts
+            docker rm -f student-app-container || true
+
+            # Pull and run updated container image
             docker pull $IMAGE_URI
             docker run -d \
               --name student-app-container \
