@@ -8,6 +8,7 @@ mongo = PyMongo(app)
 
 @app.route('/')
 @app.route('/index')
+@app.route('/home')
 def index():
     students = []
     try:
@@ -16,10 +17,6 @@ def index():
     except Exception:
         pass
     return render_template('index.html', students=students)
-
-@app.route('/home')
-def home():
-    return redirect(url_for('index'))
 
 @app.route('/add', methods=['GET', 'POST'])
 def add_student():
@@ -32,7 +29,6 @@ def add_student():
                 mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
         except Exception:
             pass
-        return redirect(url_for('index'))
     return redirect(url_for('index'))
 
 @app.route('/update/<student_id>', methods=['POST'])
