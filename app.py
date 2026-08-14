@@ -7,6 +7,7 @@ app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 mongo = PyMongo(app)
 
 @app.route('/')
+@app.route('/index')
 def index():
     students = []
     try:
