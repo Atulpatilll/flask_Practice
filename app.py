@@ -7,6 +7,7 @@ app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 mongo = PyMongo(app)
 
 @app.route('/')
+@app.route('/index')
 def index():
     students = []
     try:
@@ -20,16 +21,18 @@ def index():
 def home():
     return redirect(url_for('index'))
 
-@app.route('/add', methods=['POST'])
+@app.route('/add', methods=['GET', 'POST'])
 def add_student():
-    try:
-        if mongo.db is not None:
-            name = request.form.get('name')
-            email = request.form.get('email')
-            course = request.form.get('course')
-            mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
-    except Exception:
-        pass
+    if request.method == 'POST':
+        try:
+            if mongo.db is not None:
+                name = request.form.get('name')
+                email = request.form.get('email')
+                course = request.form.get('course')
+                mongo.db.students.insert_one({'name': name, 'email': email, 'course': course})
+        except Exception:
+            pass
+        return redirect(url_for('index'))
     return redirect(url_for('index'))
 
 @app.route('/update/<student_id>', methods=['POST'])
